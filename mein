@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>スマホ対応迷路ゲーム</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+    }
+    #maze {
+      display: grid;
+      gap: 1px;
+      justify-content: center;
+      margin-top: 10px;
+    }
+    .cell {
+      width: 6vw;
+      height: 6vw;
+      max-width: 40px;
+      max-height: 40px;
+      background-color: gray;
+      border: 1px solid #ccc;
+    }
+    .wall.visible {
+      background-color: black;
+    }
+    .path.visible {
+      background-color: white;
+    }
+    .goal.visible {
+      background-color: red;
+    }
+    .start.visible {
+      background-color: green;
+    }
+    .item.visible {
+      background-color: purple;
+    }
+    .item2.visible {
+      background-color: gold;
+    }
+    .player {
+      background-color: blue !important;
+    }
+    #mobile-controls button {
+      font-size: 24px;
+      width: 60px;
+      height: 60px;
+      margin: 5px;
+    }
+  </style>
+</head>
+<body>
+
+<h2>迷路ゲーム📱</h2>
+<div>
+  <label>視界レベル（1〜5）：</label>
+  <input type="number" id="visionInput" min="1" max="5" placeholder="空欄で1と同じ">
+</div>
+<div>
+  <label>お宝探索（1:6マス, 2:8マス, 3:10マス）:</label>
+  <input type="number" id="treasureScanInput" min="1" max="3">
+  <button onclick="scanForTreasures()">探索する</button>
+</div>
+<p id="treasureMessage"></p>
+<p id="stage-info"></p>
+<p id="treasureCount">取得したお宝：0個</p>
+
+<div id="maze"></div>
+
+<div id="mobile-controls">
+  <button onclick="movePlayer('ArrowUp')">⬆️</button><br>
+  <button onclick="movePlayer('ArrowLeft')">⬅️</button>
+  <button onclick="movePlayer('ArrowDown')">⬇️</button>
+  <button onclick="movePlayer('ArrowRight')">➡️</button>
+</div>
+
+<script>
+let maze = [], playerPos = {}, goalPos = {}, itemPos = null;
+let maxStages = Math.floor(Math.random() * 5) + 1;
+let currentStage = 1, SIZE = 15, fogCleared = false;
+let treasureCollected = 0;
+
+function getVisionRange() {
+  const input = document.getElementById("visionInput").value;
+  const num = parseInt(input);
+  if (isNaN(num) || num <= 1) return 1;
+  if (num <= 3) return 2;
+  if (num === 4) return 3;
+  return 4;
+}
+
+function updateStageInfo() {
+  document.getElementById("stage-info").innerText =
+    `ステージ ${currentStage} / ${maxStages}（${SIZE}×${SIZE}）`;
+}
+function updateTreasureCount() {
+  document.getElementById("treasureCount").innerText =
+    `取得したお宝：${treasureCollected}個`;
+}
+function createCell(x, y, isPath) {
+  const cell = document.createElement("div");
+  cell.classList.add("cell", isPath ? "path" : "wall");
+  cell.dataset.x = x;
+  cell.dataset.y = y;
+  return cell;
+}
+function updateVisibility() {
+  const range = getVisionRange();
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const cell = maze[y][x].el;
+      if (fogCleared) {
+        cell.classList.add("visible");
+      } else {
+        const dx = Math.abs(x - playerPos.x);
+        const dy = Math.abs(y - playerPos.y);
+        if (dx <= range && dy <= range) cell.classList.add("visible");
+      }
+    }
+  }
+}
+function scanForTreasures() {
+  const input = document.getElementById("treasureScanInput").value;
+  const radius = input === "1" ? 6 : input === "2" ? 8 : input === "3" ? 10 : 0;
+  if (radius === 0) {
+    document.getElementById("treasureMessage").innerText = "正しい数値（1〜3）を入力してください。";
+    return;
+  }
+  let count = 0;
+  for (let y = playerPos.y - radius; y <= playerPos.y + radius; y++) {
+    for (let x = playerPos.x - radius; x <= playerPos.x + radius; x++) {
+      if (x >= 0 && x < SIZE && y >= 0 && y < SIZE && maze[y][x].el.classList.contains("item2")) count++;
+    }
+  }
+  document.getElementById("treasureMessage").innerText = `周囲のお宝の数は${count}個ありそうだ・・・`;
+}
+
+function generateMaze() {
+  SIZE = Math.floor(Math.random() * 11) + 10;
+  fogCleared = false;
+  itemPos = null;
+  document.getElementById("treasureMessage").innerText = "";
+
+  const container = document.getElementById("maze");
+  container.innerHTML = "";
+  container.style.gridTemplateColumns = `repeat(${SIZE}, 1fr)`;
+  container.style.gridTemplateRows = `repeat(${SIZE}, 1fr)`;
+
+  maze = [];
+  for (let y = 0; y < SIZE; y++) {
+    maze[y] = [];
+    for (let x = 0; x < SIZE; x++) {
+      const isPath = Math.random() < 0.7;
+      const cell = createCell(x, y, isPath);
+      maze[y][x] = { isPath, el: cell };
+      container.appendChild(cell);
+    }
+  }
+
+  const whiteCells = [];
+  for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++)
+    if (maze[y][x].isPath) whiteCells.push({ x, y });
+
+  if (whiteCells.length < 3) return generateMaze();
+
+  const start = whiteCells[Math.floor(Math.random() * whiteCells.length)];
+  maze[start.y][start.x].el.classList.add("start");
+  playerPos = { x: start.x, y: start.y };
+
+  const visited = Array(SIZE).fill().map(() => Array(SIZE).fill(false));
+  const queue = [{ x: start.x, y: start.y, dist: 0 }];
+  let maxDist = -1, goal = null;
+
+  while (queue.length > 0) {
+    const { x, y, dist } = queue.shift();
+    if (visited[y][x]) continue;
+    visited[y][x] = true;
+    if (dist > maxDist) { maxDist = dist; goal = { x, y }; }
+    for (const [dx, dy] of [[1,0],[0,1],[-1,0],[0,-1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx >= 0 && nx < SIZE && ny >= 0 && ny < SIZE && !visited[ny][nx] && maze[ny][nx].isPath) {
+        queue.push({ x: nx, y: ny, dist: dist + 1 });
+      }
+    }
+  }
+
+  if (!goal || maxDist <= 0) return generateMaze();
+  goalPos = { x: goal.x, y: goal.y };
+  maze[goal.y][goal.x].el.classList.add("goal");
+
+  if (Math.random() < 0.1) {
+    let item;
+    do {
+      item = whiteCells[Math.floor(Math.random() * whiteCells.length)];
+    } while ((item.x === goalPos.x && item.y === goalPos.y) || (item.x === start.x && item.y === start.y));
+    itemPos = { x: item.x, y: item.y };
+    maze[item.y][item.x].el.classList.add("item");
+  }
+
+  function tryPlaceTreasures() {
+    let count = 0;
+    whiteCells.forEach(({ x, y }) => {
+      const cell = maze[y][x];
+      cell.el.classList.remove("item2");
+      if ((x === goalPos.x && y === goalPos.y) || (x === start.x && y === start.y)) return;
+      const leftWall = x - 1 < 0 || !maze[y][x - 1].isPath;
+      const rightWall = x + 1 >= SIZE || !maze[y][x + 1].isPath;
+      const prob = leftWall && rightWall ? 0.03 : (leftWall || rightWall ? 0.01 : 0.0035);
+      if (Math.random() < prob) { cell.el.classList.add("item2"); count++; }
+    });
+    return count;
+  }
+
+  while (tryPlaceTreasures() <= 5) {}
+
+  maze[playerPos.y][playerPos.x].el.classList.add("player");
+  updateVisibility();
+  updateStageInfo();
+  updateTreasureCount();
+}
+
+function movePlayer(key) {
+  const e = new KeyboardEvent("keydown", { key });
+  document.dispatchEvent(e);
+}
+
+document.addEventListener("keydown", function(e) {
+  const activeEl = document.activeElement;
+  if (activeEl && (activeEl.id === "visionInput" ||
