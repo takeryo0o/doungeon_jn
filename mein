@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>迷路ゲーム：お宝探索版</title>
+  <title>ダンジョン生成：ver1</title>
   <style>
     #maze {
       display: grid;
